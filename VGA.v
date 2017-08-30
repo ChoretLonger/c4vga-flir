@@ -93,6 +93,9 @@ wire      lep_buf_pos = lep_buf_addr[3];
 
 reg [18:0] lep_pix_cnt ;
 
+wire [7:0] resdat ;
+wire       res_val;
+
 lepton lepton(
 					.clk            (clk),
 					.lep_go_in      (locked),
@@ -101,7 +104,9 @@ lepton lepton(
 					.spimiso        (lep_smiso),
 					.lep_dat_pclk   (lep_dat_pclk),
 					.lep_framestart (lep_framestart),
-					.lep_dat        (lep_dat)
+					.lep_dat        (lep_dat),
+					.result         (resdat),
+					.res_val        (res_val)
 );
 
 
@@ -168,9 +173,11 @@ always@(posedge clk) begin
 		lep_buf_addr <= 0 ;
 		lep_pix_cnt  <= 0 ;
 	end
-	else if(lep_dat_pclk) begin
+	//else if(lep_dat_pclk) begin
+	else if(res_val) begin
 		lep_buf_addr <= (lep_buf_addr < 159) ? lep_buf_addr + 1'b1 : 0 ;
-		lep_buf[lep_buf_addr] <= lep_dat ;
+		//lep_buf[lep_buf_addr] <= lep_dat ;
+		lep_buf[lep_buf_addr] <= { resdat[7:3] , resdat[7:2] , resdat[7:3] } ;
 		
 		lep_pix_cnt  <= lep_pix_cnt + 1 ;
 	end
@@ -425,7 +432,9 @@ module lepton(
 					output wire        lep_dat_pclk ,
 					output wire        lep_framestart,
 					output wire [15:0] lep_dat,
-					output wire        error
+					output reg  [7:0]  result,
+					output wire        res_val
+					
 );
 
 reg [5:0]  clkcnt ;
@@ -510,11 +519,48 @@ end
 
 reg [15:0] maxval ;
 reg [15:0] minval ;
+reg [15:0] maxval_last ;
+reg [15:0] minval_last ;
+reg [15:0] dat2jud ;
+reg [3:0]  step ;
+
+wire [15:0] max2min = maxval_last - minval_last ;
+reg [14:0] c_val ;
+
+wire judres = (dat2jud > c_val) ? 1 : 0 ;
+//reg [7:0] result ;
+
+//wire res_val = (step == 1) ;
+assign res_val = (step == 1) ;
 
 always@(posedge clk) begin
-	if(lep_dat_pclk) begin
+	if(lep_framestart) begin
+		maxval_last <= maxval ;
+		minval_last <= minval ;
+		maxval <= 0 ;
+		minval <= 16'hffff ;
+	end
+	else if(lep_dat_pclk) begin
+		if(lep_dat > maxval) maxval <= lep_dat ;
+		if(lep_dat < minval) minval <= lep_dat ;
+		
+		if(lep_dat > minval_last) dat2jud <= lep_dat - minval_last ;
+		else dat2jud <= 0 ;
+		
+		c_val <= { 1'b0 , max2min[15:1] } ;
+		step <= 9 ;
 		
 	end
+	else if(step > 1) begin
+		step <= step - 1 ;
+		if(judres) dat2jud <= dat2jud - c_val ;
+		result <= { result[6:0] , judres } ;
+		c_val <= { 1'b0 , c_val[14:1] } ;
+	end
+	else if(step) begin
+		step <= step - 1 ;
+	end
+	
 end
 
 endmodule
