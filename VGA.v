@@ -530,8 +530,11 @@ reg [14:0] c_val ;
 wire judres = (dat2jud > c_val) ? 1 : 0 ;
 //reg [7:0] result ;
 
+reg del1cle ;
 //wire res_val = (step == 1) ;
-assign res_val = (step == 1) ;
+assign res_val = ((step == 1) && del1cle) ;
+
+
 
 always@(posedge clk) begin
 	if(lep_framestart) begin
@@ -539,6 +542,7 @@ always@(posedge clk) begin
 		minval_last <= minval ;
 		maxval <= 0 ;
 		minval <= 16'hffff ;
+		del1cle <= 0 ;
 	end
 	else if(lep_dat_pclk) begin
 		if(lep_dat > maxval) maxval <= lep_dat ;
@@ -559,6 +563,7 @@ always@(posedge clk) begin
 	end
 	else if(step) begin
 		step <= step - 1 ;
+		del1cle <= 1 ;
 	end
 	
 end
